@@ -3,13 +3,12 @@
 #include <sstream>
 #include <vector>
 #include <cmath>
-#include <algorithm>
 #include <string>
-#include <ctime>
+#include <ctime>  
 
 using namespace std;
 
-// Function to load the training dataset 
+//load the training datasect
 void loadTrainDataset(const string& filename, vector<vector<int>>& data, vector<int>& labels) {
     ifstream file(filename);
     if (!file.is_open()) {
@@ -18,12 +17,13 @@ void loadTrainDataset(const string& filename, vector<vector<int>>& data, vector<
     }
 
     string line;
-    getline(file, line); // Skip the header
+    getline(file, line);  
+    int count = 0;
     while (getline(file, line)) { 
         stringstream ss(line);
         string value;
         vector<int> row;
-        getline(ss, value, ','); // First column is the label
+        getline(ss, value, ',');  // First column is the label
         labels.push_back(stoi(value));
         while (getline(ss, value, ',')) {
             row.push_back(stoi(value));
@@ -32,7 +32,7 @@ void loadTrainDataset(const string& filename, vector<vector<int>>& data, vector<
     }
 }
 
-// Function to load the test dataset 
+// Load the test dataset
 void loadTestDataset(const string& filename, vector<vector<int>>& data) {
     ifstream file(filename);
     if (!file.is_open()) {
@@ -41,8 +41,9 @@ void loadTestDataset(const string& filename, vector<vector<int>>& data) {
     }
 
     string line;
-    getline(file, line); // Skip the header
-    while (getline(file, line)) { 
+    getline(file, line);  
+    int count = 0;
+    while (getline(file, line)) {  
         stringstream ss(line);
         string value;
         vector<int> row;
@@ -53,104 +54,98 @@ void loadTestDataset(const string& filename, vector<vector<int>>& data) {
     }
 }
 
-// Function to compute the Euclidean distance between two data points
-double euclideanDistance(const vector<int>& a, const vector<int>& b) {
-    double sum = 0;
-    for (size_t i = 0; i < a.size(); ++i) {
-        sum += pow(a[i] - b[i], 2);
-    }
-    return sqrt(sum);
+// Sigmoid function for logistic regression
+double sigmoid(double z) {
+    return 1.0 / (1.0 + exp(-z));
 }
 
-// KNN algorithm to predict the label for a test image
-int knn(const vector<vector<int>>& trainData, const vector<int>& trainLabels, const vector<int>& testData, int k) {
-    vector<pair<double, int>> distances;
-
-    // Calculate distance to all training data
-    for (size_t i = 0; i < trainData.size(); ++i) {
-        double dist = euclideanDistance(trainData[i], testData);
-        distances.push_back(make_pair(dist, trainLabels[i]));
+// Logistic Regression Prediction (Binary classification)
+int predict(const vector<double>& theta, const vector<int>& x) {
+    double z = 0.0;
+    for (size_t i = 0; i < x.size(); ++i) {
+        z += theta[i] * x[i];
     }
+    return sigmoid(z) >= 0.5 ? 1 : 0;  // Binary classification
+}
 
-    // Sort the distances
-    sort(distances.begin(), distances.end());
+// Train logistic regression using gradient descent
+vector<double> trainLogisticRegression(const vector<vector<int>>& X, const vector<int>& y, double alpha, int iterations) {
+    size_t m = X.size();
+    size_t n = X[0].size();
+    vector<double> theta(n, 0);  // Initialize theta with zeros
 
-    // Get the labels of the k nearest neighbors
-    vector<int> nearestLabels;
-    for (int i = 0; i < k; ++i) {
-        nearestLabels.push_back(distances[i].second);
-    }
+    for (int i = 0; i < iterations; ++i) {
+        vector<double> gradients(n, 0.0);
+        for (size_t j = 0; j < m; ++j) {
+            int prediction = predict(theta, X[j]);
+            int error = y[j] - prediction;
 
-    // Find the most common label among the nearest neighbors
-    vector<int> count(10, 0); // There are 10 digits (0-9)
-    for (int label : nearestLabels) {
-        count[label]++;
-    }
+            for (size_t k = 0; k < n; ++k) {
+                gradients[k] += error * X[j][k];
+            }
+        }
 
-    int maxCount = 0;
-    int predictedLabel = -1;
-    for (int i = 0; i < 10; ++i) {
-        if (count[i] > maxCount) {
-            maxCount = count[i];
-            predictedLabel = i;
+        // Update the theta values
+        for (size_t k = 0; k < n; ++k) {
+            theta[k] += (alpha / m) * gradients[k];
         }
     }
 
-    return predictedLabel;
+    return theta;
 }
 
-// Function to save the result to result.csv
+// Save the result to result.csv
 void saveResult(const vector<int>& predictions, const string& filename) {
     ofstream file(filename);
     file << "ImageId,Label\n";
     for (size_t i = 0; i < predictions.size(); ++i) {
-        file << i + 1 << "," << predictions[i] << "\n"; // ImageId starts from 1
+        file << i + 1 << "," << predictions[i] << "\n";  // ImageId starts from 1
     }
 }
 
+// Main function
 int main() {
     vector<vector<int>> trainData, testData;
     vector<int> trainLabels;
 
-    // Load the first 50 samples from train.csv and test.csv
+    // Load datasets
     loadTrainDataset("train.csv", trainData, trainLabels);
     loadTestDataset("test.csv", testData);
 
-    int k = 3; // Number of nearest neighbors
-    vector<int> predictions;
-
-    // Start time
-    time_t startTime;
-    time(&startTime);
-
-    time_t lastReportTime = startTime;
-
-    // Classify each test image
-    for (size_t i = 0; i < testData.size(); ++i) {
-        int label = knn(trainData, trainLabels, testData[i], k);
-        predictions.push_back(label);
-
-        // Check elapsed time every 10 seconds
-        time_t currentTime;
-        time(&currentTime);
-        if (difftime(currentTime, lastReportTime) >= 10 ) {
-            double elapsed = difftime(currentTime, startTime);
-            cout << "Elapsed time: " << elapsed << " seconds (" << elapsed / 60 << " minutes)." << endl;
-            lastReportTime = currentTime; // Update last report time
-        }
+    // Prepare the dataset for Logistic Regression (Add bias term, 1)
+    for (auto& row : trainData) {
+        row.insert(row.begin(), 1);  
     }
 
-    // End time
-    time_t endTime;
-    time(&endTime);
+    for (auto& row : testData) {
+        row.insert(row.begin(), 1);  
+    }
 
-    // Save the predictions to result.csv
+    // Parameters for Logistic Regression
+    double alpha = 0.01;  
+    int iterations = 1000; 
+
+    
+    time_t startTime, endTime;
+    time(&startTime);  
+
+    vector<double> theta = trainLogisticRegression(trainData, trainLabels, alpha, iterations);
+
+    vector<int> predictions;
+
+    // Loop through the test data
+    for (size_t i = 0; i < testData.size(); ++i) {
+        int label = predict(theta, testData[i]);
+        predictions.push_back(label);
+    }
+
+    // End the clock to calculate total time
+    time(&endTime);  
+    double totalElapsedTime = difftime(endTime, startTime);
+
     saveResult(predictions, "result.csv");
 
-    // Print total runtime
-    double totalElapsed = difftime(endTime, startTime);
-    cout << "Total runtime for classification: " << totalElapsed << " seconds (" << totalElapsed / 60 << " minutes)." << endl;
-
+    cout << "Total runtime for classification: " << totalElapsedTime << " seconds (" << totalElapsedTime / 60 << " minutes)." << endl;
     cout << "Results saved to result.csv." << endl;
 
     return 0;
